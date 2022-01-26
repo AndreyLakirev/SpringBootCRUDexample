@@ -1,15 +1,39 @@
-package application.model;
+package com.lakirev.employee.model;
 
+import javax.persistence.Column;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.Id;
+import javax.persistence.Table;
 import java.util.Objects;
 
+@Entity
+@Table(name = "Employee")
 public class Employee {
+    @Id
+    @GeneratedValue
+    @Column(name = "Id", nullable = false)
+    private Long id;
+
+    @Column(name = "Last_Name")
     private String lastName;
 
+    @Column(name = "First_Name")
     private String firstName;
 
+    @Column(name = "Age")
     private int age;
 
+    @Column(name = "Position")
     private String position;
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
 
     public String getLastName() {
         return lastName;

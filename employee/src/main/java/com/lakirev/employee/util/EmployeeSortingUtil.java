@@ -1,6 +1,6 @@
-package application.util;
+package com.lakirev.employee.util;
 
-import application.model.Employee;
+import com.lakirev.employee.model.Employee;
 
 import java.util.Comparator;
 import java.util.List;
