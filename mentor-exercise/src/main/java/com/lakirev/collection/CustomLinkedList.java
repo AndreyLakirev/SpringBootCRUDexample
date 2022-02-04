@@ -1,4 +1,4 @@
-package com.lakirev.util.model;
+package com.lakirev.collection;
 
 import java.util.Iterator;
 

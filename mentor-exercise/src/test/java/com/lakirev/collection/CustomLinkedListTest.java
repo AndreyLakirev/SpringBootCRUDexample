@@ -1,4 +1,4 @@
-package com.lakirev.util.model;
+package com.lakirev.collection;
 
 import org.junit.Before;
 import org.junit.Test;

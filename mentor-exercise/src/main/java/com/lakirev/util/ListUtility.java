@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class ListUtility {
-    public static <T> List<T> getDistinctElements (List<T> list) {
+    public static <T> List<T> getDistinctElements(List<T> list) {
         List<T> distinctList = new ArrayList<>();
         for (T element : list) {
             if (!distinctList.contains(element)) {

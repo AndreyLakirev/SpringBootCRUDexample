@@ -18,6 +18,6 @@
     <modules>
         <module>runner</module>
         <module>employee</module>
-        <module>utility</module>
+        <module>mentor-exercise</module>
     </modules>
 </project>
