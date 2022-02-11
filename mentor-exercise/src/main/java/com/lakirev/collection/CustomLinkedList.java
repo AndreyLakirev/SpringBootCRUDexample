@@ -2,7 +2,7 @@ package com.lakirev.collection;
 
 import java.util.Iterator;
 
-public class CustomLinkedList<T> implements Iterable<T> {
+public class CustomLinkedList <T> implements Iterable<T> {
     private int size = 0;
 
     public int size() {

@@ -1,23 +1,36 @@
 package com.lakirev.json.parser;
 
 import com.lakirev.json.exception.JsonParseException;
-import com.lakirev.json.util.JsonParseUtil;
+import com.lakirev.json.util.JsonParseUtility;
 import com.lakirev.util.StringUtility;
+import org.springframework.stereotype.Service;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
-import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Class for parsing Java objects to JSON and from JSON
+ * Does not accept cyclic reference in objects, also does not support Arrays, only Lists
+ */
+@Service
 public class CustomJsonParser {
     private static final SimpleDateFormat FORMATTER = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
+    private static final String CYCLIC_REFERENCE_MESSAGE = "Could not parse json: Unacceptable cyclic reference in target object: ";
+
+    private final JsonParseUtility parseUtility;
+
     private boolean writingNullValues = false;
+
+    public CustomJsonParser(JsonParseUtility parseUtility) {
+        this.parseUtility = parseUtility;
+    }
 
     public boolean isWritingNullValues() {
         return writingNullValues;
@@ -34,14 +47,14 @@ public class CustomJsonParser {
             cons.setAccessible(true);
             T result = cons.newInstance();
             cons.setAccessible(isConstructorAccessible);
-            HashMap<String, String> parameters = JsonParseUtil.getObjectParameters(json);
+            Map<String, String> parameters = parseUtility.getObjectParameters(json);
             for (Map.Entry<String, String> kvp : parameters.entrySet()) {
                 Field field = type.getDeclaredField(kvp.getKey());
                 boolean isAccessible = field.isAccessible();
                 field.setAccessible(true);
                 Class<?> fieldType = field.getType();
                 if (isSuitableType(fieldType)) {
-                    field.set(result, JsonParseUtil.generateObjectFromString(kvp.getValue(), fieldType));
+                    field.set(result, parseUtility.generateObjectFromString(kvp.getValue(), fieldType));
                 } else if (List.class.isAssignableFrom(fieldType)) {
                     field.set(result, fromJsonToList(kvp.getValue(), Class.forName(StringUtility.parseGenericTypeName(field.getGenericType().getTypeName()))));
                 } else {
@@ -57,7 +70,7 @@ public class CustomJsonParser {
 
     public <T> List<T> fromJsonToList(String json, Class<T> type) throws JsonParseException {
         List<T> list = new ArrayList<>();
-        for (String jsonObject : JsonParseUtil.getMajorJsonObjects(json)) {
+        for (String jsonObject : parseUtility.getMajorJsonObjects(json)) {
             list.add(fromJson(jsonObject, type));
         }
         return list;
@@ -65,7 +78,7 @@ public class CustomJsonParser {
 
     public <T> String toJson(T object) throws JsonParseException {
         if (hasCyclicReference(object, new ArrayList())) {
-            throw new JsonParseException("Could not parse json: Unacceptable cyclic reference in target object: " + object);
+            throw new JsonParseException(CYCLIC_REFERENCE_MESSAGE + object);
         }
         return returnJson(object).toString();
     }
@@ -101,6 +114,8 @@ public class CustomJsonParser {
                             if (i != fields.length - 1) {
                                 result.append(", ");
                             }
+                        } else if (i == fields.length - 1 && result.charAt(result.length() - 2) == ',') {
+                            result.setLength(result.length() - 2);
                         }
                         continue;
                     }

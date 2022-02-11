@@ -1,5 +1,7 @@
 package com.lakirev.util;
 
+import org.springframework.stereotype.Service;
+
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
@@ -8,12 +10,16 @@ import java.util.Date;
 import java.util.List;
 import java.util.Random;
 
+/**
+ * Utility Class, that allows you to generate random Object of specific Type, filling its fields with random values
+ */
+@Service
 public class RandomObjectGenerator {
-    public static <T> T generateRandomObject(Class<T> type) {
+    public <T> T generateRandomObject(Class<T> type) {
         return generate(type, new ArrayList<>(), false);
     }
 
-    public static <T> List<T> generateRandomObjects(Class<T> type, int count) {
+    public <T> List<T> generateRandomObjects(Class<T> type, int count) {
         if (count < 0) {
             throw new IllegalArgumentException("Negative count of objects to generate");
         }
@@ -24,7 +30,7 @@ public class RandomObjectGenerator {
         return result;
     }
 
-    private static <T> T generate(Class<T> type, List<Class> classList, boolean ignoreCycling) {
+    private <T> T generate(Class<T> type, List<Class> classList, boolean ignoreCycling) {
         try {
             if (classList.contains(type)) {
                 throw new IllegalArgumentException("Unacceptable cyclic reference in type hierarchy detected");
@@ -38,6 +44,7 @@ public class RandomObjectGenerator {
             T result = cons.newInstance();
             cons.setAccessible(isConstructorAccessible);
             for (Field field : result.getClass().getDeclaredFields()) {
+                if (field.getName().equals("id")) continue;
                 boolean isAccessible = field.isAccessible();
                 field.setAccessible(true);
                 Class<?> fieldType = field.getType();

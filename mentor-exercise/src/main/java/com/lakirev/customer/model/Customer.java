@@ -1,12 +1,42 @@
-package com.lakirev.model;
+package com.lakirev.customer.model;
 
+import javax.persistence.CascadeType;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.OneToMany;
 import java.util.List;
 import java.util.Objects;
 
+@Entity
 public class Customer {
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    private Long id;
+
     private String name;
+
     private Integer age;
+
+    @OneToMany(cascade = CascadeType.ALL)
     private List<Purchase> purchases;
+
+    public Customer() {}
+
+    public Customer(String name, Integer age, List<Purchase> purchases) {
+        this.name = name;
+        this.age = age;
+        this.purchases = purchases;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
 
     public String getName() {
         return name;

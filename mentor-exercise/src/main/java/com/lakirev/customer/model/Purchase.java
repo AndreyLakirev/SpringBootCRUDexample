@@ -1,12 +1,42 @@
-package com.lakirev.model;
+package com.lakirev.customer.model;
 
+import javax.persistence.CascadeType;
+import javax.persistence.Entity;
+import javax.persistence.GeneratedValue;
+import javax.persistence.GenerationType;
+import javax.persistence.Id;
+import javax.persistence.OneToOne;
 import java.util.Date;
 import java.util.Objects;
 
+@Entity
 public class Purchase {
+    @Id
+    @GeneratedValue(strategy = GenerationType.SEQUENCE)
+    private Long id;
+
     private Integer cost;
+
+    @OneToOne(cascade = CascadeType.ALL)
     private Product product;
+
     private Date date;
+
+    public Purchase() {}
+
+    public Purchase(Integer cost, Product product, Date date) {
+        this.cost = cost;
+        this.product = product;
+        this.date = date;
+    }
+
+    public Long getId() {
+        return id;
+    }
+
+    public void setId(Long id) {
+        this.id = id;
+    }
 
     public Integer getCost() {
         return cost;
