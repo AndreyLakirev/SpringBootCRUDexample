@@ -16,8 +16,7 @@
     <version>1.0-SNAPSHOT</version>
 
     <modules>
-        <module>runner</module>
         <module>employee</module>
-        <module>mentor-exercise</module>
+        <module>mentor-exercise1</module>
     </modules>
 </project>
