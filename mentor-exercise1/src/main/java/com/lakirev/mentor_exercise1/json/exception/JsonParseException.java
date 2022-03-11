@@ -13,4 +13,3 @@ public class JsonParseException extends RuntimeException {
         super(throwable);
     }
 }
-

@@ -6,10 +6,14 @@ import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Random;
-import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
 
 /**
  * Utility Class, that allows you to generate random Object of specific Type, filling its fields with random values
@@ -31,11 +35,34 @@ public class RandomObjectGenerator {
         return result;
     }
 
-    public <T> Callable<List<T>> generateRandomObjectsAsync(Class<T> type, int count) {
-        return ArrayList::new;
+    public <T> Future<List<T>> generateRandomObjectsAsync(Class<T> type, int count, int threadCount) {
+        ExecutorService executorService = Executors.newFixedThreadPool(threadCount);
+        int step = count / threadCount;
+        List<FutureTask<List<T>>> futureList = new ArrayList<>();
+        for (int i = 0; i < threadCount; i++) {
+            FutureTask<List<T>> future = new FutureTask<>(() -> generateRandomObjects(type, step));
+            executorService.execute(future);
+            futureList.add(future);
+        }
+        if (count % threadCount != 0) {
+            int remainderCount = count % threadCount;
+            FutureTask<List<T>> future = new FutureTask<>(() -> generateRandomObjects(type, remainderCount));
+            executorService.execute(future);
+            futureList.add(future);
+        }
+        FutureTask<List<T>> result = new FutureTask<>(() -> {
+            List<T> resultList = Collections.synchronizedList(new ArrayList<>(count));
+            for (Future<List<T>> future : futureList) {
+                resultList.addAll(future.get());
+            }
+            return resultList;
+        });
+        executorService.execute(result);
+        executorService.shutdown();
+        return result;
     }
 
-    private <T> T generate(Class<T> type, List<Class> classList, boolean ignoreCycling) {
+    private <T> T generate(Class<T> type, List<Object> classList, boolean ignoreCycling) {
         try {
             if (classList.contains(type)) {
                 throw new IllegalArgumentException("Unacceptable cyclic reference in type hierarchy detected");
@@ -60,7 +87,7 @@ public class RandomObjectGenerator {
         }
     }
 
-    private <T> void setFieldWithRandomValue(Field field, T targetObject, List<Class> classList) {
+    private <T> void setFieldWithRandomValue(Field field, T targetObject, List<Object> classList) {
         try {
             if (field.getName().equals("id")) return;
             boolean isAccessible = field.isAccessible();

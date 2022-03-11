@@ -1,40 +1,44 @@
-package com.lakirev.mentor_exercise1.json.parser;
+package com.lakirev.mentor_exercise1.json.service;
 
 import com.lakirev.mentor_exercise1.json.exception.JsonParseException;
-import com.lakirev.mentor_exercise1.json.util.JsonParseUtility;
+import com.lakirev.mentor_exercise1.json.util.JsonReader;
+import com.lakirev.mentor_exercise1.json.util.StringObjectParser;
 import com.lakirev.mentor_exercise1.util.StringUtility;
 import org.springframework.stereotype.Service;
 
-import java.io.BufferedReader;
-import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
-import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static com.lakirev.mentor_exercise1.json.util.JsonObjectValidator.hasCyclicReference;
+import static com.lakirev.mentor_exercise1.json.util.JsonTypeValidator.isSuitableQuotedType;
+import static com.lakirev.mentor_exercise1.json.util.JsonTypeValidator.isSuitableType;
+import static com.lakirev.mentor_exercise1.json.util.JsonTypeValidator.isSuitableUnquotedType;
+
 /**
  * Class for parsing Java objects to JSON and from JSON
- * Does not accept cyclic reference in objects, also does not support Arrays, only Lists
+ * Does not accept cyclic reference in objects, also does not support Arrays, only Comparable
  */
 @Service
-public class ReflectionJsonParser {
+public class ReflectionJsonParser implements JsonParser{
     private static final SimpleDateFormat FORMATTER = new SimpleDateFormat("dd/MM/yyyy HH:mm:ss");
 
     private static final String CYCLIC_REFERENCE_MESSAGE = "Could not parse json: Unacceptable cyclic reference in target object: ";
 
-    private final JsonParseUtility parseUtility;
+    private final JsonReader jsonReader;
+
+    private final StringObjectParser stringObjectParser;
 
     private boolean writingNullValues = false;
 
-    public ReflectionJsonParser(JsonParseUtility parseUtility) {
-        this.parseUtility = parseUtility;
+    public ReflectionJsonParser(JsonReader jsonReader, StringObjectParser stringObjectParser) {
+        this.jsonReader = jsonReader;
+        this.stringObjectParser = stringObjectParser;
     }
 
     public boolean isWritingNullValues() {
@@ -52,14 +56,14 @@ public class ReflectionJsonParser {
             cons.setAccessible(true);
             T result = cons.newInstance();
             cons.setAccessible(isConstructorAccessible);
-            Map<String, String> parameters = parseUtility.getObjectParameters(json);
+            Map<String, String> parameters = jsonReader.readObjectParameters(json.toCharArray());
             for (Map.Entry<String, String> kvp : parameters.entrySet()) {
                 Field field = type.getDeclaredField(kvp.getKey());
                 boolean isAccessible = field.isAccessible();
                 field.setAccessible(true);
                 Class<?> fieldType = field.getType();
                 if (isSuitableType(fieldType)) {
-                    field.set(result, parseUtility.generateObjectFromString(kvp.getValue(), fieldType));
+                    field.set(result, stringObjectParser.parseObject(kvp.getValue(), fieldType));
                 } else if (List.class.isAssignableFrom(fieldType)) {
                     field.set(result, fromJsonToList(kvp.getValue(), Class.forName(StringUtility.parseGenericTypeName(field.getGenericType().getTypeName()))));
                 } else {
@@ -75,49 +79,14 @@ public class ReflectionJsonParser {
 
     public <T> List<T> fromJsonToList(String json, Class<T> type) {
         List<T> list = new ArrayList<>();
-        for (String jsonObject : parseUtility.getMajorJsonObjects(json.toCharArray())) {
+        for (String jsonObject : jsonReader.readMajorJsonObjects(json.toCharArray())) {
             list.add(fromJson(jsonObject, type));
         }
         return list;
     }
 
-    public <T> void fromJsonStream(InputStream stream, int bufferSize, Class<T> type, ObjectConsumer<T> consumer) {
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            int c;
-            char[] charArray = new char[bufferSize];
-            List<String> list = new ArrayList<>();
-            int index;
-            for (index = 0; index < bufferSize; index++) {
-                c = reader.read();
-                if (c == -1) break;
-                charArray[index] = (char) c;
-                if (index == bufferSize - 1) {
-                    int remainderIndex = parseUtility.writeMajorJsonObjectsWithRemainderIndex(charArray, list);
-                    if (!list.isEmpty()) {
-                        for (String s : list) {
-                            consumer.consume(fromJson(s, type));
-                        }
-                        list.clear();
-                    }
-                    if (bufferSize - remainderIndex >= 0)
-                        System.arraycopy(charArray, remainderIndex, charArray, 0, bufferSize - remainderIndex);
-                    index = bufferSize - 1 - remainderIndex;
-                }
-            }
-            parseUtility.writeMajorJsonObjectsWithRemainderIndex(Arrays.copyOf(charArray, index + 1), list);
-            if (!list.isEmpty()) {
-                for (String s : list) {
-                    consumer.consume(fromJson(s, type));
-                }
-                list.clear();
-            }
-        } catch (Exception e) {
-            throw new JsonParseException(e);
-        }
-    }
-
     public <T> String toJson(T object) throws JsonParseException {
-        if (hasCyclicReference(object, new ArrayList<>())) {
+        if (hasCyclicReference(object)) {
             throw new JsonParseException(CYCLIC_REFERENCE_MESSAGE + object);
         }
         return returnJson(object).toString();
@@ -170,13 +139,11 @@ public class ReflectionJsonParser {
             field.setAccessible(true);
             Object fieldObject = field.get(targetObject);
             if (fieldObject == null) {
-                if (writingNullValues) {
-                    result.append("\"");
-                    result.append(field.getName());
-                    result.append("\": null");
-                    return result;
-                }
-                return null;
+                if (!writingNullValues) return null;
+                result.append("\"");
+                result.append(field.getName());
+                result.append("\": null");
+                return result;
             }
             Class<?> type = field.getType();
             result.append("\"");
@@ -198,65 +165,7 @@ public class ReflectionJsonParser {
             field.setAccessible(isAccessible);
             return result;
         } catch (Exception e) {
-            throw new JsonParseException(e.getMessage(), e);
+            throw new JsonParseException(e);
         }
-    }
-
-    private <T> boolean hasCyclicReference(T object, List<Object> list) {
-        if (object == null) {
-            return false;
-        }
-        if (list == null) {
-            list = new ArrayList<>();
-        }
-        if (object instanceof Iterable) {
-            for (Object iterable : (Iterable<?>) object) {
-                if (!isSuitableType(iterable.getClass()) && hasCyclicReference(iterable, list)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        if (isSuitableType(object.getClass())) {
-            return false;
-        }
-        if (list.contains(object)) {
-            return true;
-        }
-        list.add(object);
-        Field[] fields = object.getClass().getDeclaredFields();
-        for (Field field : fields) {
-            if (!isSuitableType(field.getType())) {
-                try {
-                    boolean isAccessible = field.isAccessible();
-                    field.setAccessible(true);
-                    Object complexObject = field.get(object);
-                    field.setAccessible(isAccessible);
-                    if (hasCyclicReference(complexObject, list)) {
-                        return true;
-                    }
-                } catch (Exception e) {
-                    throw new RuntimeException("Illegal access exception", e);
-                }
-            }
-        }
-        list.remove(object);
-        return false;
-    }
-
-    private boolean isSuitableType(Class<?> type) {
-        return isSuitableQuotedType(type) || isSuitableUnquotedType(type);
-    }
-
-    private boolean isSuitableUnquotedType(Class<?> type) {
-        return short.class.equals(type) || Short.class.equals(type) || int.class.equals(type)
-                || Integer.class.equals(type) || long.class.equals(type) || Long.class.equals(type)
-                || float.class.equals(type) || Float.class.equals(type) || double.class.equals(type)
-                || Double.class.equals(type) || boolean.class.equals(type) || Boolean.class.equals(type);
-    }
-
-    private boolean isSuitableQuotedType(Class<?> type) {
-        return String.class.equals(type) || char.class.equals(type) || Character.class.equals(type)
-                || Date.class.equals(type);
     }
 }
